@@ -5,7 +5,7 @@
 > independent control instructions.
 
 **Team Yondu** · ENEE 408J Capstone · University of Maryland, College Park · Spring 2025
-Rajit Mukhopadhyay · Shaurya Agarwal · Nate Fireman · Owen Mank · Jamil Takieddine
+Rajit Mukhopadhyay · Owen Mank · Jamil Takieddine · Nate Fireman · Shaurya Agarwal
 
 **🕹 Live demo:** [altair-ajit.github.io/yondu/web](https://altair-ajit.github.io/yondu/web/) · **🔧 Build guide:** [altair-ajit.github.io/yondu/web/build.html](https://altair-ajit.github.io/yondu/web/build.html)
 
