@@ -41,7 +41,8 @@
   <a href="#firmware">03 · firmware</a>
   <a href="#receiver">04 · receiver</a>
   <a href="#calibrate">05 · calibrate &amp; map</a>
-  <a href="#team">06 · team</a>
+  <a href="#pitch">06 · pitch control</a>
+  <a href="#team">07 · team</a>
 </nav>
 
 <!-- ============================================================ -->
@@ -272,13 +273,6 @@ python3 signal_processor.py</code></pre>
     musical notes). Swap the Arduino sketch's motor routines for whatever
     your actuator needs; the acquisition and decision layers don't change.
   </p>
-  <div class="callout gold">
-    <strong>Bridge to the simulator:</strong> the
-    <a href="index.html">web sim</a>'s downloadable whistle print uses this
-    same schema — <code>Peaks</code> with frequency, sensitivity, and output
-    codes — so a signature calibrated in the browser is a valid starting
-    config for the hardware.
-  </div>
   <div class="callout">
     <strong>Placement &amp; noise, before you blame the code:</strong> don't
     mount the mic inside a resonant body (it amplified voice frequencies into
@@ -290,8 +284,69 @@ python3 signal_processor.py</code></pre>
 </section>
 
 <!-- ============================================================ -->
+<section id="pitch">
+  <h2><span class="no">06</span> Pitch control — run the simulator's mode on hardware</h2>
+  <p>
+    Discrete notes (§05) are one map. The
+    <a href="index.html">simulator</a> demonstrates the other: <strong>pitch-style
+    continuous control</strong>, where the controller calibrates to
+    <em>your whistle</em> and reads where your pitch sits inside your own
+    range — hold your center note to go, slide high to turn one way, low to
+    turn the other, go quiet to stop. You can run that same scheme on this
+    hardware without touching a line of code.
+  </p>
+
+  <h3>How the mapping works</h3>
+  <p>
+    The whistle print you download from the simulator doesn't store three
+    narrow notes — its bands <strong>tile your entire calibrated range</strong>,
+    split at the same dead-zone boundaries the sim's gesture classifier uses
+    (±22% of your range in log-frequency, around your center). Any whistle
+    inside your range therefore always lands in exactly one band:
+  </p>
+  <div class="tbl-scroll"><table>
+    <tr><th>You whistle…</th><th>Band</th><th>Code</th><th>Rover</th><th>Sim arrow</th></tr>
+    <tr><td>near your center note</td><td>Hold</td><td><code>A</code></td><td>drive forward</td><td>thrust</td></tr>
+    <tr><td>above the dead zone</td><td>PitchUp</td><td><code>C</code></td><td>pivot right</td><td>bank right</td></tr>
+    <tr><td>below the dead zone</td><td>PitchDown</td><td><code>D</code></td><td>pivot left</td><td>bank left</td></tr>
+    <tr><td>…nothing (silence)</td><td>—</td><td><code>0</code></td><td>stop</td><td>coast</td></tr>
+  </table></div>
+
+  <h3>Setup, end to end</h3>
+  <ol>
+    <li><a href="index.html">Open the simulator</a>, enable your microphone,
+      and run the ~8-second calibration (noise floor → steady note → sweep up
+      → sweep down).</li>
+    <li>Fly the arrow until the controls feel natural — the rover will obey
+      the identical gesture boundaries.</li>
+    <li>Hit <strong>⇩ whistle print</strong> and save the JSON.</li>
+    <li>Rename it <code>config.json</code>, drop it on the rover's USB
+      config stick, and start <code>signal_processor.py</code> (§04).</li>
+    <li>Whistle. The arrow on your screen and the rover on your floor are now
+      speaking the same language.</li>
+  </ol>
+
+  <div class="callout gold">
+    <strong>Tune for whistles:</strong> the drum build band-passed
+    ~20&nbsp;Hz–1&nbsp;kHz; whistles live around 500–3000&nbsp;Hz, so widen
+    the filter range accordingly. In loud rooms, raise
+    <code>Global_Amplitude</code> so breaths and chatter stay below the
+    gate.
+  </div>
+  <div class="callout">
+    <strong>What's different from the sim:</strong> the stock firmware drives
+    at fixed PWM, so whistle <em>loudness</em> doesn't scale speed, and turns
+    are discrete pivots at the detection cadence rather than smooth banking —
+    that's exactly why §03 runs turn PWM slow. If you want the full demo
+    feel, a small mod to <code>signal_processor.py</code> can scale an extra
+    PWM byte from the detected peak's amplitude and pass it alongside the
+    code.
+  </div>
+</section>
+
+<!-- ============================================================ -->
 <section id="team">
-  <h2><span class="no">06</span> Team Yondu</h2>
+  <h2><span class="no">07</span> Team Yondu</h2>
   <p class="affil">
     <b>University of Maryland, College Park</b> · Department of Electrical and
     Computer Engineering<br>

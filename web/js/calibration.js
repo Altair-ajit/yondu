@@ -114,18 +114,36 @@
       };
     }
 
-    /** Export in the shape of the rover's config.json (plus sim extras). */
+    /**
+     * Export in the shape of the rover's config.json (plus sim extras).
+     * The three bands TILE the calibrated range exactly the way the sim
+     * classifies gestures — hold inside the dead zone, up/down outside it —
+     * so dropping this file onto the rover's config stick reproduces the
+     * demo's pitch-style control with the stock signal processor:
+     * A = hold/forward, C = pitch up/right, D = pitch down/left, 0 = stop.
+     */
     toConfig() {
       const s = this.signature;
-      const band = (f) => Math.max(15, Math.round(f * 0.04)); // ±4% ≈ ±0.7 semitone
+      const DEAD = 0.22; // same dead zone as the sim's gesture classifier
+      // Dead-zone edges in log-frequency space, matching gestures.js _position().
+      const holdLo = s.center * Math.pow(s.min / s.center, DEAD);
+      const holdHi = s.center * Math.pow(s.max / s.center, DEAD);
+      const r1 = (x) => Math.round(x * 10) / 10;
+      // Center-frequency + (+/-) sensitivity representation of a band [a, b].
+      const band = (a, b, code) => ({
+        frequency: r1((a + b) / 2),
+        sensitivity: r1((b - a) / 2),
+        output_code: code
+      });
       return {
         config_name: 'web_whistle_print',
         Global_Sensitivity: 10.0,
         Global_Amplitude: Math.round(s.floor + 60),
         Peaks: {
-          Hold:      { frequency: s.center, sensitivity: band(s.center), output_code: 'A' },
-          PitchUp:   { frequency: s.max,    sensitivity: band(s.max),    output_code: 'C' },
-          PitchDown: { frequency: s.min,    sensitivity: band(s.min),    output_code: 'D' }
+          // 1% insets keep the bands from double-matching at shared edges.
+          Hold:      band(holdLo, holdHi, 'A'),
+          PitchUp:   band(holdHi * 1.01, s.max * 1.02, 'C'),
+          PitchDown: band(s.min * 0.98, holdLo * 0.99, 'D')
         },
         sim: { ...s, calibrated_at: new Date().toISOString() }
       };
