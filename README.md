@@ -13,12 +13,14 @@ Rajit Mukhopadhyay · Owen Mank · Jamil Takieddine · Nate Fireman · Shaurya A
 
 ## What this is
 
-For our capstone we built a rover you drive with music. Strike a note on a
-tongue drum and a wearable "fin" (INMP441 mic + ESP32) streams the raw audio
-over Bluetooth to a Raspberry Pi, which FFTs the signal, matches frequency
-peaks against a JSON config, and serial-commands an Arduino to spin the
-motors — hit-to-wheel in under 200 ms. It survived a full day of strangers
-driving it at the UMD Capstone Design Expo.
+For our capstone we built a configurable control system that translates audio
+cues in the audible range into machine commands. A wearable "fin" (INMP441
+mic + ESP32) streams raw audio over Bluetooth to a Raspberry Pi, which FFTs
+the signal, matches frequency peaks against a JSON config, and emits
+instruction codes over serial — sound-to-action in under 200 ms, remappable
+to any actuator by editing a file. We demoed it with a tongue drum driving a
+2WD rover, which survived a full day of strangers steering it at the UMD
+Capstone Design Expo.
 
 This repo is the complete record **plus a living demo**:
 
