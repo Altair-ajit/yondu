@@ -11,9 +11,12 @@
 (function () {
   const Yondu = window.Yondu = window.Yondu || {};
 
-  const MAX_TURN = 2.6;     // rad/s at |p| = 1
-  const THRUST = 340;       // px/s^2 at full power
-  const DRAG = 0.9;         // per-second velocity retention when silent
+  const MAX_TURN = 2.6;       // rad/s at |p| = 1
+  const THRUST = 400;         // px/s^2 at full power
+  const DRAG_POWERED = 1.1;   // exponential drag rate (1/s) while whistling
+  const DRAG_COAST = 2.4;     // much stronger when silent — settles quickly
+  const BOUNCE = 0.72;        // velocity kept when bouncing off an edge
+  const WALL = 34;            // soft wall inset (≈ arrow half-length)
   const MAX_SPEED = 420;
 
   Yondu.Simulation = class Simulation {
@@ -31,17 +34,29 @@
     update(dt, t, control) {
       const a = this.arrow, v = this.vel;
 
+      const W = this.arena.w, H = this.arena.h;
+
       if (this.mode === 'idle') {
         // Attract mode: the arrow drifts in lazy hunting curves.
         this._wanderT += dt;
         const turn = Math.sin(this._wanderT * 0.45) * 0.9 + Math.sin(this._wanderT * 0.13) * 0.5;
         a.heading += turn * dt;
+        // Steer back toward the middle when the wander nears an edge.
+        const margin = 90;
+        if (a.x < margin || a.x > W - margin || a.y < margin || a.y > H - margin) {
+          const target = Math.atan2(H / 2 - a.y, W / 2 - a.x);
+          let d = target - a.heading;
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          a.heading += d * Math.min(1, dt * 2);
+        }
         const sp = 60 + 25 * Math.sin(this._wanderT * 0.3);
         v.x = Math.cos(a.heading) * sp;
         v.y = Math.sin(a.heading) * sp;
         a.glow = 0.35 + 0.15 * Math.sin(this._wanderT * 1.2);
       } else if (control) {
         const { gesture, p, power } = control;
+        let dragRate = DRAG_COAST;
         if (gesture !== 'silence') {
           // Bank rate scales with how far the pitch sits from center.
           if (gesture === 'up') a.heading += MAX_TURN * Math.max(0, p) * dt;
@@ -49,23 +64,28 @@
           v.x += Math.cos(a.heading) * THRUST * power * dt;
           v.y += Math.sin(a.heading) * THRUST * power * dt;
           a.glow += (Math.min(1, 0.35 + power) - a.glow) * Math.min(1, dt * 8);
+          dragRate = DRAG_POWERED;
         } else {
-          const keep = Math.pow(DRAG, dt * 3);
-          v.x *= keep; v.y *= keep;
           a.glow += (0.08 - a.glow) * Math.min(1, dt * 3);
           // Hover bob when nearly stopped.
           if (Math.hypot(v.x, v.y) < 15) a.y += Math.sin(t * 2.2) * 6 * dt;
         }
+        // Drag always applies — stronger when coasting, so the arrow
+        // answers the whistle instead of skating away with momentum.
+        const keep = Math.exp(-dragRate * dt);
+        v.x *= keep;
+        v.y *= keep;
       }
 
-      // clamp speed, integrate, wrap at edges
+      // clamp speed, integrate, bounce off edges (no wrap teleport)
       const sp = Math.hypot(v.x, v.y);
       if (sp > MAX_SPEED) { v.x *= MAX_SPEED / sp; v.y *= MAX_SPEED / sp; }
       a.x += v.x * dt;
       a.y += v.y * dt;
-      const m = 40, W = this.arena.w, H = this.arena.h;
-      if (a.x < -m) a.x = W + m; else if (a.x > W + m) a.x = -m;
-      if (a.y < -m) a.y = H + m; else if (a.y > H + m) a.y = -m;
+      if (a.x < WALL) { a.x = WALL; if (v.x < 0) v.x = -v.x * BOUNCE; }
+      else if (a.x > W - WALL) { a.x = W - WALL; if (v.x > 0) v.x = -v.x * BOUNCE; }
+      if (a.y < WALL) { a.y = WALL; if (v.y < 0) v.y = -v.y * BOUNCE; }
+      else if (a.y > H - WALL) { a.y = H - WALL; if (v.y > 0) v.y = -v.y * BOUNCE; }
 
       // When coasting fast, align heading with velocity for a thrown look.
       if ((this.mode !== 'idle') && (!control || control.gesture === 'silence') && sp > 40) {
