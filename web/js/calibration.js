@@ -16,25 +16,25 @@
       id: 'silence', title: 'Hold still',
       instruction: 'Measuring the room’s noise floor. Stay quiet for a moment…',
       hint: 'This sets how loud a whistle must be to count.',
-      needFrames: 70, voiced: false
+      needFrames: 40, voiced: false
     },
     {
       id: 'steady', title: 'Whistle one note',
       instruction: 'Whistle a single comfortable note and hold it steady.',
       hint: 'Any note works — this becomes your center.',
-      needFrames: 80, voiced: true
+      needFrames: 45, voiced: true
     },
     {
       id: 'up', title: 'Slide up',
       instruction: 'Whistle from your comfortable note up to as high as you can.',
       hint: 'Sweep up slowly, like a rising siren.',
-      needFrames: 80, voiced: true
+      needFrames: 45, voiced: true
     },
     {
       id: 'down', title: 'Slide down',
       instruction: 'Now whistle from your note down to as low as you can.',
       hint: 'Sweep down slowly. Almost there.',
-      needFrames: 80, voiced: true
+      needFrames: 45, voiced: true
     }
   ];
 
