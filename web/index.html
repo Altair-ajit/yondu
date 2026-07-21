@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YONDU — Whistle-Controlled Arrow</title>
+<meta name="description" content="Calibrate to your whistle, then fly a yaka arrow with pitch — a browser simulation of Team Yondu's capstone multi-frequency controller.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏹</text></svg>">
+</head>
+<body>
+
+<canvas id="space"></canvas>
+
+<!-- ======================= HUD ======================= -->
+<div id="hud" aria-hidden="true">
+  <header class="hud-top">
+    <div class="hud-brand">
+      <span class="brand-mark"></span>
+      <h1>YONDU</h1>
+      <span class="brand-sub">multi-frequency controller · web sim</span>
+    </div>
+    <div class="hud-status">
+      <span class="lamp" id="lamp-mic" title="audio input"></span><span class="lamp-label" id="lamp-mic-label">MIC OFF</span>
+      <span class="lamp" id="lamp-sig" title="whistle signature"></span><span class="lamp-label" id="lamp-sig-label">NO PRINT</span>
+    </div>
+  </header>
+
+  <div class="hud-readout" id="readout">
+    <div class="ro-row"><span class="ro-key">FREQ</span><span class="ro-val" id="ro-freq">——</span><span class="ro-unit">Hz</span></div>
+    <div class="ro-row"><span class="ro-key">LVL</span><span class="ro-val" id="ro-db">——</span><span class="ro-unit">dB</span></div>
+    <div class="ro-row"><span class="ro-key">VEL</span><span class="ro-val" id="ro-vel">0.0</span><span class="ro-unit">u/s</span></div>
+  </div>
+
+  <div class="gesture-chip" id="gesture-chip" data-g="silence">
+    <span class="g-arrow" id="g-arrow">·</span>
+    <span id="g-label">SILENCE</span>
+  </div>
+
+  <div class="ribbon-wrap" id="ribbon-wrap">
+    <span class="ribbon-tag">PITCH TRACE</span>
+    <canvas id="ribbon"></canvas>
+  </div>
+
+  <div class="hud-foot">
+    <button class="ghost-btn" id="btn-recal" hidden>⟲ recalibrate</button>
+    <button class="ghost-btn" id="btn-signature" hidden>⇩ whistle print</button>
+    <a class="ghost-btn" href="https://github.com/rajitzp" id="btn-repo" target="_blank" rel="noopener">⧉ hardware &amp; docs</a>
+  </div>
+</div>
+
+<!-- ======================= OVERLAY / FLOW ======================= -->
+<div id="overlay">
+  <!-- Landing -->
+  <section class="card" id="card-landing">
+    <p class="card-kicker">ENEE 408J · Team Yondu · UMD Capstone 2025</p>
+    <h2>Whistle. <em>Fly.</em></h2>
+    <p class="card-body">
+      Our capstone was a rover steered by musical notes — a mic on an ESP32,
+      FFT on a Raspberry&nbsp;Pi, motors on an Arduino. This is its
+      <strong>continuous-control mode</strong>, reborn in your browser:
+      calibrate a personal <strong>whistle print</strong>, then steer a yaka
+      arrow with nothing but pitch.
+    </p>
+    <div class="btn-row">
+      <button class="cta" id="btn-mic">◉ &nbsp;Enable microphone</button>
+      <button class="cta alt" id="btn-demo">▸ &nbsp;Watch autopilot demo</button>
+    </div>
+    <p class="fineprint">Audio never leaves your device — all processing is local. Chrome/Edge/Firefox recommended.</p>
+  </section>
+
+  <!-- Calibration -->
+  <section class="card" id="card-calib" hidden>
+    <p class="card-kicker" id="calib-step-no">CALIBRATION · STEP 1/4</p>
+    <h2 id="calib-title">Hold still</h2>
+    <p class="card-body" id="calib-instruction">Measuring the room's noise floor…</p>
+    <div class="calib-meter">
+      <div class="meter-ring"><svg viewBox="0 0 120 120">
+        <circle class="ring-bg" cx="60" cy="60" r="52"/>
+        <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="52"/>
+      </svg><span class="ring-freq" id="ring-freq">·</span></div>
+      <p class="calib-hint" id="calib-hint">&nbsp;</p>
+    </div>
+    <div class="btn-row">
+      <button class="ghost-btn" id="btn-calib-redo" hidden>⟲ redo step</button>
+      <button class="ghost-btn" id="btn-calib-cancel">✕ cancel</button>
+    </div>
+  </section>
+
+  <!-- Signature review -->
+  <section class="card" id="card-review" hidden>
+    <p class="card-kicker">CALIBRATION COMPLETE</p>
+    <h2>Your whistle print</h2>
+    <div class="sig-grid">
+      <div class="sig-cell"><span class="sig-k">LOW</span><span class="sig-v" id="sig-min">—</span></div>
+      <div class="sig-cell sig-center"><span class="sig-k">CENTER</span><span class="sig-v" id="sig-center">—</span></div>
+      <div class="sig-cell"><span class="sig-k">HIGH</span><span class="sig-v" id="sig-max">—</span></div>
+    </div>
+    <p class="card-body">
+      Whistle near <strong>center</strong> to thrust straight · slide
+      <strong>higher</strong> to bank right · <strong>lower</strong> to bank
+      left · go <strong>silent</strong> to coast. Louder = faster.
+    </p>
+    <div class="btn-row">
+      <button class="cta" id="btn-fly">➤ &nbsp;Fly the arrow</button>
+      <button class="ghost-btn" id="btn-redo-all">⟲ recalibrate</button>
+    </div>
+  </section>
+
+  <!-- Error -->
+  <section class="card" id="card-error" hidden>
+    <p class="card-kicker">SIGNAL LOST</p>
+    <h2>No microphone</h2>
+    <p class="card-body" id="error-body">Microphone access was blocked. Allow it in your browser's site settings, or watch the autopilot demo instead.</p>
+    <div class="btn-row">
+      <button class="cta alt" id="btn-demo-2">▸ &nbsp;Watch autopilot demo</button>
+      <button class="ghost-btn" id="btn-retry-mic">⟲ retry microphone</button>
+    </div>
+  </section>
+</div>
+
+<div class="demo-banner" id="demo-banner" hidden>AUTOPILOT DEMO — synthesized whistle &nbsp;·&nbsp; <button id="btn-exit-demo">take over with your mic</button></div>
+
+<div class="scanlines" aria-hidden="true"></div>
+
+<script src="js/audio-engine.js"></script>
+<script src="js/synth.js"></script>
+<script src="js/calibration.js"></script>
+<script src="js/gestures.js"></script>
+<script src="js/arrow.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "config_name": "env_scan",
+  "Global_Sensitivity": 10.0,
+  "Global_Amplitude": 65.0,
+  "Peaks": {}
+}

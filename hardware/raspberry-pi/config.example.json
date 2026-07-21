@@ -1,0 +1,27 @@
+{
+  "config_name": "tongue_drum_expo",
+  "Global_Sensitivity": 10.0,
+  "Global_Amplitude": 65.0,
+  "Peaks": {
+    "Peak1": {
+      "frequency": 440.0,
+      "sensitivity": 5.0,
+      "output_code": "A"
+    },
+    "Peak2": {
+      "frequency": 523.25,
+      "sensitivity": 5.0,
+      "output_code": "B"
+    },
+    "Peak3": {
+      "frequency": 587.33,
+      "sensitivity": 5.0,
+      "output_code": "C"
+    },
+    "Peak4": {
+      "frequency": 659.25,
+      "sensitivity": 5.0,
+      "output_code": "D"
+    }
+  }
+}
