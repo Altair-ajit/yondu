@@ -7,21 +7,22 @@ import { join } from 'node:path';
 const ID = 'yondu';
 const URL = process.env.PREVIEW_URL || 'http://localhost:8123/web/';
 const THEME = 'dark';                 // 'light' | 'dark'
-const FLIGHT_SECONDS = 13;            // how long to fly before stopping
-const CLIP_SECONDS = 12;              // final clip = last N seconds (pure flight)
+const FLIGHT_SECONDS = 3.4;           // flight tail after calibration
+const LEAD_SECONDS = 0.6;             // landing-card beat kept before the click
+const marks = { page: 0, click: 0 };  // wall-clock marks for the trim
 const steps = async (page) => {
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(800);
   // Start the autopilot demo (synth whistle) — a real click so the
-  // AudioContext gets its user-gesture activation.
+  // AudioContext gets its user-gesture activation. The final clip starts
+  // just before this click so the calibration story is included.
+  marks.click = Date.now();
   await page.getByRole('button', { name: /autopilot demo/i }).click();
   // Calibration (~8 s): noise floor -> steady -> sweep up -> sweep down.
   await page.waitForFunction(() => window.Yondu?.app?.state === 'review', null, { timeout: 45000 });
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: /fly the arrow/i }).click();
   await page.waitForFunction(() => window.Yondu?.app?.state === 'flight', null, { timeout: 5000 });
-  // Fly. The clip is trimmed to the tail of this stretch, so the loop is
-  // flight -> flight: same view at both ends.
   await page.waitForTimeout(FLIGHT_SECONDS * 1000);
 };
 // --------------------------------
@@ -39,6 +40,7 @@ const context = await browser.newContext({
   recordVideo: { dir: TMP, size: { width: 1280, height: 800 } },
 });
 const page = await context.newPage();
+marks.page = Date.now();              // video timeline starts ~here
 await page.goto(URL, { waitUntil: 'load' });
 await page.waitForTimeout(500);
 // Without ffmpeg the clip keeps its lead-in, so the poster is the first frame (landing).
@@ -52,9 +54,10 @@ const webm = join(OUT, `${ID}.webm`);
 const poster = join(OUT, `${ID}-poster.jpg`);
 
 if (hasFfmpeg) {
-  // Trim to the last CLIP_SECONDS (pure flight) so the loop starts and ends
-  // mid-flight, then derive mp4 + first-frame poster from the final clip.
-  execFileSync('ffmpeg', ['-y', '-sseof', `-${CLIP_SECONDS}`, '-i', vid, '-an',
+  // Cut the page-load dead time: start the clip a beat before the demo
+  // click, keeping calibration + flight. Poster = final clip's first frame.
+  const cutStart = Math.max(0, (marks.click - marks.page) / 1000 - LEAD_SECONDS);
+  execFileSync('ffmpeg', ['-y', '-ss', cutStart.toFixed(2), '-i', vid, '-an',
     '-c:v', 'libvpx-vp9', '-crf', '36', '-b:v', '0', webm], { stdio: 'inherit' });
   console.log(`✓ ${webm}`);
   const mp4 = join(OUT, `${ID}.mp4`);
