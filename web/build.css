@@ -1,0 +1,295 @@
+/* ============================================================
+   YONDU — build-the-device field manual (scrolling doc page,
+   same cockpit language as the sim but its own layout).
+   ============================================================ */
+
+:root {
+  --bg: #04050a;
+  --panel: rgba(9, 11, 18, 0.86);
+  --line: rgba(255, 74, 61, 0.28);
+  --line-strong: rgba(255, 74, 61, 0.65);
+  --red: #ff4a3d;
+  --red-deep: #b3241c;
+  --gold: #ffb454;
+  --ink: #d4dae6;
+  --ink-dim: #6e7a8f;
+  --ok: #7dd87d;
+  --display: 'Michroma', sans-serif;
+  --mono: 'Share Tech Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background:
+    radial-gradient(ellipse 120% 60% at 70% -5%, #10131f 0%, #070910 55%, #04050a 100%) fixed;
+  color: var(--ink);
+  font-family: var(--mono);
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* faint scanlines, like the sim */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+  z-index: 5;
+}
+
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 22px 90px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- masthead ---------- */
+header.mast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22px 0 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 44px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.mast-brand { display: flex; align-items: center; gap: 14px; }
+.mast-mark {
+  width: 26px; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--red));
+  box-shadow: 0 0 8px var(--red);
+  clip-path: polygon(0 50%, 78% 0, 100% 50%, 78% 100%);
+}
+.mast-brand strong {
+  font-family: var(--display);
+  font-weight: normal;
+  font-size: 17px;
+  letter-spacing: 0.4em;
+  text-shadow: 0 0 18px rgba(255, 74, 61, 0.55);
+}
+.mast-brand span { font-size: 11px; letter-spacing: 0.16em; color: var(--ink-dim); text-transform: uppercase; }
+
+.back-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  border: 1px solid rgba(255,180,84,0.5);
+  padding: 9px 16px;
+  text-decoration: none;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  transition: box-shadow .15s, color .15s;
+}
+.back-btn:hover { box-shadow: 0 0 18px rgba(255,180,84,0.25); color: #ffd9a0; }
+
+/* ---------- hero ---------- */
+.hero-kicker { font-size: 11px; letter-spacing: 0.3em; color: var(--gold); margin-bottom: 12px; }
+h1 {
+  font-family: var(--display);
+  font-weight: normal;
+  font-size: clamp(28px, 5vw, 44px);
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  margin-bottom: 18px;
+}
+h1 em { font-style: normal; color: var(--red); text-shadow: 0 0 22px rgba(255,74,61,0.6); }
+.lede { font-size: 15px; max-width: 640px; color: var(--ink); opacity: 0.9; margin-bottom: 10px; }
+.lede strong { color: var(--gold); font-weight: normal; }
+
+/* ---------- table of contents ---------- */
+nav.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 26px 0 60px;
+}
+nav.toc a {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+  text-decoration: none;
+  border: 1px solid rgba(110,122,143,0.3);
+  padding: 6px 12px;
+  transition: color .15s, border-color .15s;
+}
+nav.toc a:hover { color: var(--red); border-color: var(--line-strong); }
+
+/* ---------- sections ---------- */
+section { margin-bottom: 64px; scroll-margin-top: 24px; }
+
+h2 {
+  font-family: var(--display);
+  font-weight: normal;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+h2 .no { font-family: var(--mono); font-size: 13px; color: var(--gold); letter-spacing: 0.2em; }
+
+h3 {
+  font-family: var(--mono);
+  font-weight: normal;
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin: 28px 0 10px;
+}
+
+p { margin-bottom: 14px; font-size: 14px; }
+p strong { color: var(--gold); font-weight: normal; }
+p em { font-style: normal; color: var(--red); }
+a { color: var(--red); }
+
+ul, ol { margin: 0 0 16px 20px; font-size: 14px; }
+li { margin-bottom: 6px; }
+li strong { color: var(--gold); font-weight: normal; }
+
+/* ---------- tables ---------- */
+.tbl-scroll { overflow-x: auto; margin-bottom: 18px; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  background: rgba(9,11,18,0.6);
+}
+th, td { border: 1px solid rgba(110,122,143,0.25); padding: 8px 12px; text-align: left; }
+th {
+  font-weight: normal;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: rgba(255,74,61,0.06);
+}
+td code { color: var(--gold); }
+tr:hover td { background: rgba(255,74,61,0.04); }
+
+/* ---------- code ---------- */
+pre {
+  background: #070910;
+  border: 1px solid rgba(110,122,143,0.3);
+  border-left: 3px solid var(--red-deep);
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.65;
+  margin-bottom: 18px;
+}
+code { font-family: var(--mono); }
+p code, li code {
+  color: var(--gold);
+  background: rgba(255,180,84,0.08);
+  padding: 1px 5px;
+  border: 1px solid rgba(255,180,84,0.18);
+}
+pre .c { color: var(--ink-dim); }
+
+/* ---------- figures ---------- */
+figure {
+  margin: 22px 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+}
+figure img { display: block; width: 100%; height: auto; }
+figcaption {
+  background: var(--panel);
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  padding: 8px 14px;
+}
+
+/* ---------- callouts ---------- */
+.callout {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--red);
+  background: rgba(255,74,61,0.05);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  font-size: 13.5px;
+}
+.callout.gold { border-left-color: var(--gold); border-color: rgba(255,180,84,0.3); background: rgba(255,180,84,0.05); }
+.callout strong { color: var(--gold); font-weight: normal; }
+
+/* ---------- signal chain diagram ---------- */
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  margin: 20px 0 24px;
+}
+.chain .node {
+  flex: 1 1 120px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 12px 10px;
+  text-align: center;
+  min-width: 118px;
+}
+.chain .node b { display: block; font-weight: normal; color: var(--red); font-size: 13px; letter-spacing: 0.08em; margin-bottom: 4px; }
+.chain .node span { font-size: 10.5px; color: var(--ink-dim); letter-spacing: 0.06em; line-height: 1.5; display: block; }
+.chain .hop {
+  align-self: center;
+  color: var(--gold);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: center;
+  padding: 0 2px;
+}
+
+/* ---------- team credits ---------- */
+.team-names {
+  text-align: center;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 18px 20px;
+  margin: 18px 0 6px;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+}
+
+.affil {
+  text-align: center;
+  margin: 26px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+.affil b { color: var(--gold); font-weight: normal; }
+
+/* ---------- footer ---------- */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+footer a { color: var(--gold); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .chain { flex-direction: column; }
+  .chain .hop { padding: 2px 0; }
+  h2 { font-size: 16px; }
+}

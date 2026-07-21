@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build the Yondu Arrow — Multi-Frequency Based Controller</title>
+<meta name="description" content="Field manual for recreating Team Yondu's audio-controlled rover: parts, wiring, firmware, signal processing, and how to remap it into a general sound-based control system.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="build.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏹</text></svg>">
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="mast-brand">
+    <span class="mast-mark"></span>
+    <strong>YONDU</strong>
+    <span>field manual</span>
+  </div>
+  <a class="back-btn" href="index.html">◂ fly the simulator</a>
+</header>
+
+<p class="hero-kicker">MULTI-FREQUENCY BASED CONTROLLER · HARDWARE EDITION</p>
+<h1>Build the <em>arrow</em>.</h1>
+<p class="lede">
+  A configurable system that translates complex audio cues in the audible
+  range into independent output instructions — for sensing and control.
+  This is the complete recipe for the physical device Team Yondu demoed at
+  the UMD Capstone Design Expo: a rover you drive by <strong>striking notes
+  on a tongue drum</strong>, and a decision layer you can remap to control
+  almost anything that listens to serial.
+</p>
+
+<nav class="toc">
+  <a href="#overview">00 · overview</a>
+  <a href="#parts">01 · parts</a>
+  <a href="#wiring">02 · wiring</a>
+  <a href="#firmware">03 · firmware</a>
+  <a href="#receiver">04 · receiver</a>
+  <a href="#calibrate">05 · calibrate &amp; map</a>
+  <a href="#team">06 · team</a>
+</nav>
+
+<!-- ============================================================ -->
+<section id="overview">
+  <h2><span class="no">00</span> System overview</h2>
+  <p>
+    The device splits into two halves. The <strong>transmitter</strong> (“the
+    fin”) is worn or held near the sound source: an INMP441 I2S microphone
+    feeding an ESP32 that streams raw audio over Bluetooth. The
+    <strong>receiver</strong> rides on the rover: a Raspberry&nbsp;Pi&nbsp;4
+    that FFTs the stream, matches frequency peaks against a JSON
+    configuration, and serial-commands an Arduino&nbsp;UNO driving the
+    motors. Hit-to-wheel latency lands under <em>200&nbsp;ms</em>.
+  </p>
+
+  <div class="chain">
+    <div class="node"><b>INMP441</b><span>I2S MEMS mic<br>48 kHz · 32-bit</span></div>
+    <div class="hop">— I2S —▸</div>
+    <div class="node"><b>ESP32</b><span>capture +<br>Bluetooth TX</span></div>
+    <div class="hop">— BT serial<br>115200 —▸</div>
+    <div class="node"><b>RASPBERRY PI 4</b><span>FFT · peak match<br>config.json</span></div>
+    <div class="hop">— USB serial<br>9600 —▸</div>
+    <div class="node"><b>ARDUINO UNO</b><span>H-bridge motor<br>routines</span></div>
+    <div class="hop">—▸</div>
+    <div class="node"><b>ROVER</b><span>Lafvin 2WD<br>chassis</span></div>
+  </div>
+
+  <figure>
+    <img src="assets/arrow-design.png" alt="Arrow design: transmitter (INMP441 + ESP32) and receiver (Raspberry Pi 4, USB configuration device, Arduino) with the signal-to-movement flow">
+    <figcaption>FIG 1 · ARROW DESIGN — TRANSMITTER / RECEIVER STACK AND SIGNAL-TO-MOVEMENT FLOW</figcaption>
+  </figure>
+
+  <p>
+    The signal-processing pipeline on the Pi, in order:
+    <strong>1.</strong> convert the raw I2S stream to dB&nbsp;SPL ·
+    <strong>2.</strong> band-pass filter to the instrument's range
+    (~20&nbsp;Hz–1&nbsp;kHz for the drum) ·
+    <strong>3.</strong> subtract the RMS-estimated noise floor ·
+    <strong>4.</strong> FFT to isolate frequency peaks ·
+    <strong>5.</strong> group peaks within ~5&nbsp;Hz / 5&nbsp;dB to cut
+    processing overhead · then map surviving peaks to output codes from the
+    configuration file.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<section id="parts">
+  <h2><span class="no">01</span> Bill of materials</h2>
+  <div class="tbl-scroll"><table>
+    <tr><th>Qty</th><th>Part</th><th>Role</th></tr>
+    <tr><td>1</td><td>Lafvin 2WD Robotic Kit</td><td>Chassis, 2 DC gear motors + rear caster, motor driver</td></tr>
+    <tr><td>1</td><td>Raspberry Pi 4</td><td>Signal processing &amp; decision logic</td></tr>
+    <tr><td>1</td><td>ESP32 DEV Module</td><td>Audio acquisition &amp; Bluetooth transmission</td></tr>
+    <tr><td>1</td><td>INMP441 I2S microphone</td><td>Raw audio capture</td></tr>
+    <tr><td>1</td><td>Arduino UNO</td><td>Motor actuation</td></tr>
+    <tr><td>2</td><td>5 V / 2 A USB battery pack</td><td>One for the Pi + Arduino stack, one for the transmitter</td></tr>
+    <tr><td>1</td><td>Prototyping board</td><td>Solid, replaceable INMP441 ↔ ESP32 mounting</td></tr>
+    <tr><td>1</td><td>USB flash drive</td><td>Carries <code>config.json</code> — remap behavior without touching the Pi</td></tr>
+    <tr><td>—</td><td>Hookup wire + solder</td><td>Short, soldered runs (see §07)</td></tr>
+    <tr><td>1</td><td>Tongue drum (or any tonal instrument)</td><td>The controller</td></tr>
+  </table></div>
+  <div class="callout gold">
+    <strong>Why a drum and not whistling?</strong> Whistling precise
+    frequencies is hard, and sustaining instruments (recorder, violin) hold a
+    note best — but a tongue drum needs zero skill and zero sanitation
+    worries, which is exactly what you want when strangers line up to drive
+    your robot. The web simulator next door is the whistle version: its
+    continuous-control mode calibrates to <em>your</em> range instead of
+    demanding fixed notes.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="wiring">
+  <h2><span class="no">02</span> Wiring</h2>
+
+  <h3>INMP441 → ESP32 (I2S)</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>INMP441 pin</th><th>ESP32 pin</th></tr>
+    <tr><td>SCK — serial clock</td><td><code>GPIO 32</code></td></tr>
+    <tr><td>WS — word select</td><td><code>GPIO 25</code></td></tr>
+    <tr><td>SD — serial data</td><td><code>GPIO 33</code></td></tr>
+    <tr><td>L/R — channel select</td><td><code>GND</code> (left)</td></tr>
+    <tr><td>VDD</td><td><code>3V3</code></td></tr>
+    <tr><td>GND</td><td><code>GND</code></td></tr>
+  </table></div>
+
+  <h3>Arduino UNO → motor driver</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>Signal</th><th>Pin</th></tr>
+    <tr><td>Left motor PWM (<code>Lpwm_pin</code>)</td><td><code>5</code></td></tr>
+    <tr><td>Right motor PWM (<code>Rpwm_pin</code>)</td><td><code>6</code></td></tr>
+    <tr><td>Left forward / backward (<code>pinLF</code> / <code>pinLB</code>)</td><td><code>2</code> / <code>4</code></td></tr>
+    <tr><td>Right forward / backward (<code>pinRF</code> / <code>pinRB</code>)</td><td><code>7</code> / <code>8</code></td></tr>
+  </table></div>
+
+  <h3>Links between devices</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>Link</th><th>Transport</th></tr>
+    <tr><td>ESP32 → Raspberry Pi</td><td>Bluetooth serial · <code>/dev/rfcomm0</code> · 115200 baud</td></tr>
+    <tr><td>Raspberry Pi → Arduino</td><td>USB serial · <code>/dev/ttyUSB0</code> · 9600 baud</td></tr>
+    <tr><td>Config flash drive → Pi</td><td>USB</td></tr>
+  </table></div>
+
+  <div class="callout">
+    <strong>Solder it.</strong> Long unsoldered jumpers measurably raised the
+    electrical noise floor. Keeping wire runs short and soldering the
+    INMP441 ↔ ESP32 connections through a prototyping board was one of the
+    single biggest signal-clarity wins of the project.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="firmware">
+  <h2><span class="no">03</span> Firmware</h2>
+
+  <h3>ESP32 — transmitter</h3>
+  <p>
+    Flash <a href="../hardware/esp32/yondu_mic_tx/yondu_mic_tx.ino">hardware/esp32/yondu_mic_tx.ino</a>
+    from the Arduino IDE (board: <em>ESP32 Dev Module</em>). It reads
+    512-sample I2S buffers at 48&nbsp;kHz/32-bit and streams every sample as
+    a text line over Bluetooth serial, advertising as
+    <code>ESP32_Yondu</code>. The I2S mic bring-up follows atomic14's
+    <code>esp32-i2s-mic-test</code>.
+  </p>
+
+  <h3>Arduino — actuator</h3>
+  <p>
+    Flash <a href="../hardware/arduino/yondu_rover/yondu_rover.ino">hardware/arduino/yondu_rover.ino</a>
+    (board: <em>Arduino UNO</em>). Engineering-standards notes from the
+    paper: all pins are declared with <code>#define</code>/<code>const</code>
+    (no dynamic allocation), <code>setup()</code> calls the stop routine
+    first so the rover stays put during initialization, and direction pins
+    default LOW so a brown-out can't twitch the wheels. Commands are
+    newline-terminated strings:
+  </p>
+  <div class="tbl-scroll"><table>
+    <tr><th>Code</th><th>Action</th><th>PWM</th></tr>
+    <tr><td><code>A</code></td><td>Drive forward</td><td>128</td></tr>
+    <tr><td><code>B</code></td><td>Drive backward</td><td>128</td></tr>
+    <tr><td><code>C</code></td><td>Pivot right</td><td>100</td></tr>
+    <tr><td><code>D</code></td><td>Pivot left</td><td>128</td></tr>
+    <tr><td><code>0</code></td><td>Stop</td><td>0</td></tr>
+  </table></div>
+  <div class="callout gold">
+    <strong>Turns are deliberately slow.</strong> The Pi's sampling cadence
+    made fast pivots overshoot, so turn PWM is reduced — each drum note nudges
+    the heading a controllable amount. This one change is most of why expo
+    visitors could actually steer.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="receiver">
+  <h2><span class="no">04</span> Receiver setup (Raspberry Pi)</h2>
+<pre><code><span class="c"># dependencies</span>
+sudo apt update &amp;&amp; sudo apt install python3-numpy python3-serial bluez
+
+<span class="c"># pair with the transmitter (once)</span>
+bluetoothctl
+  scan on          <span class="c"># note ESP32_Yondu's MAC</span>
+  pair &lt;MAC&gt;
+  trust &lt;MAC&gt;
+  quit
+
+<span class="c"># bind the Bluetooth serial port (each boot, or via systemd)</span>
+sudo rfcomm bind /dev/rfcomm0 &lt;MAC&gt;
+
+<span class="c"># drop in a config and run</span>
+cp config.example.json config.json
+python3 signal_processor.py</code></pre>
+  <p>
+    <code>signal_processor.py</code> buffers 1024-sample windows, applies a
+    Hanning window + FFT, converts magnitudes to dB, and checks every
+    configured peak: frequency within <code>sensitivity</code> Hz and
+    amplitude above threshold&nbsp;→ its <code>output_code</code> is sent to
+    the Arduino. No peak matched&nbsp;→ <code>0</code> (stop).
+  </p>
+  <figure>
+    <img src="assets/processing-flow.png" alt="Microcontroller processing chain: ESP32 input, Bluetooth to Raspberry Pi, FFT script, action selection in Python, serial codes to the Arduino actuator">
+    <figcaption>FIG 2 · MICROCONTROLLER PROCESSING — FROM RAW SAMPLES TO ACTUATOR CODES</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section id="calibrate">
+  <h2><span class="no">05</span> Calibrate &amp; map — use it as a control system</h2>
+  <p>
+    The decision layer is <strong>entirely configuration-driven</strong> —
+    this is what turns a drum-driven rover into a general audio control
+    system. The Pi never hardcodes a note: it reads a JSON file (from the
+    USB stick) mapping frequency bands to arbitrary output codes.
+  </p>
+
+  <h3>Step 1 — survey your instrument / environment</h3>
+  <p>
+    Run the processor with the <code>env_scan</code> config: instead of
+    driving, it prints the top-20 FFT peaks it hears. Strike each note
+    repeatedly, at different angles and intensities, and log which
+    frequencies recur and how much they vary.
+  </p>
+<pre><code>{ "config_name": "env_scan", "Global_Sensitivity": 10.0,
+  "Global_Amplitude": 65.0, "Peaks": {} }</code></pre>
+
+  <h3>Step 2 — pick separable frequencies</h3>
+  <p>
+    Choose notes whose measured bands don't overlap (the team's phase-3
+    testing established confidence intervals per drum pad and kept the four
+    most stable, distinguishable ones). Adjacent or harmonically related
+    notes will cross-trigger — see §07.
+  </p>
+
+  <h3>Step 3 — write the map</h3>
+<pre><code>{
+  "config_name": "tongue_drum_expo",
+  "Global_Sensitivity": 10.0,   <span class="c">// default ± Hz tolerance</span>
+  "Global_Amplitude": 65.0,     <span class="c">// dB threshold — raise in loud rooms</span>
+  "Peaks": {
+    "Peak1": { "frequency": 440.00, "sensitivity": 5.0, "output_code": "A" },
+    "Peak2": { "frequency": 523.25, "sensitivity": 5.0, "output_code": "B" },
+    "Peak3": { "frequency": 587.33, "sensitivity": 5.0, "output_code": "C" },
+    "Peak4": { "frequency": 659.25, "sensitivity": 5.0, "output_code": "D" }
+  }
+}</code></pre>
+  <p>
+    The output codes are just bytes on a serial line. Point them at anything:
+    the paper's application studies included <strong>smart homes</strong>
+    (tone-triggered lights, appliances, locks), <strong>industrial
+    monitoring</strong> (self-disengage when frequencies associated with
+    mechanical failure appear — here the "instrument" is the machine itself),
+    and <strong>interactive exhibits</strong> (visitors trigger displays with
+    musical notes). Swap the Arduino sketch's motor routines for whatever
+    your actuator needs; the acquisition and decision layers don't change.
+  </p>
+  <div class="callout gold">
+    <strong>Bridge to the simulator:</strong> the
+    <a href="index.html">web sim</a>'s downloadable whistle print uses this
+    same schema — <code>Peaks</code> with frequency, sensitivity, and output
+    codes — so a signature calibrated in the browser is a valid starting
+    config for the hardware.
+  </div>
+  <div class="callout">
+    <strong>Placement &amp; noise, before you blame the code:</strong> don't
+    mount the mic inside a resonant body (it amplified voice frequencies into
+    false triggers — keep it <em>near</em> the instrument), trigger one note
+    at a time (simultaneous tones interfere and bury the dominant peak), and
+    test with background noise playing before you trust the map in a real
+    room.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="team">
+  <h2><span class="no">06</span> Team Yondu</h2>
+  <p class="affil">
+    <b>University of Maryland, College Park</b> · Department of Electrical and
+    Computer Engineering<br>
+    ENEE 408J Capstone · Spring 2025 · Advised by Professor Brian Beaudoin
+  </p>
+  <p class="team-names">
+    Rajit Mukhopadhyay · Shaurya Agarwal · Nathan Fireman · Owen Mank · Jamil Takieddine
+  </p>
+</section>
+
+<footer>
+  <span>Team Yondu · UMD ECE · ENEE 408J · Spring 2025 · MIT License</span>
+  <span>
+    <a href="index.html">◂ fly the simulator</a> &nbsp;·&nbsp;
+    <a href="https://github.com/rajitzp">source &amp; full report</a> &nbsp;·&nbsp;
+    <a href="https://github.com/atomic14/esp32-i2s-mic-test" rel="noopener">I2S bring-up: atomic14</a>
+  </span>
+</footer>
+
+</div>
+</body>
+</html>

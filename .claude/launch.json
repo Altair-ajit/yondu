@@ -4,7 +4,7 @@
     {
       "name": "yondu-web",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "web"],
+      "runtimeArgs": ["-m", "http.server", "8123"],
       "port": 8123
     }
   ]
