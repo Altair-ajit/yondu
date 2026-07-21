@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Build the Yondu Arrow — Multi-Frequency Based Controller</title>
-<meta name="description" content="Field manual for recreating Team Yondu's audio-controlled rover: parts, wiring, firmware, signal processing, and how to remap it into a general sound-based control system.">
+<meta name="description" content="Build your own audio-frequency control system: parts, wiring, firmware, and calibration — with Team Yondu's expo rover as the worked example.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -18,20 +18,21 @@
   <div class="mast-brand">
     <span class="mast-mark"></span>
     <strong>YONDU</strong>
-    <span>field manual</span>
+    <span>build guide</span>
   </div>
   <a class="back-btn" href="index.html">◂ fly the simulator</a>
 </header>
 
-<p class="hero-kicker">MULTI-FREQUENCY BASED CONTROLLER · HARDWARE EDITION</p>
-<h1>Build the <em>arrow</em>.</h1>
+<p class="hero-kicker">MULTI-FREQUENCY BASED CONTROLLER · BUILD GUIDE</p>
+<h1>Build your own <em>arrow</em>.</h1>
 <p class="lede">
-  A configurable system that translates complex audio cues in the audible
-  range into independent output instructions — for sensing and control.
-  This is the complete recipe for the physical device Team Yondu demoed at
-  the UMD Capstone Design Expo: a rover you drive by <strong>striking notes
-  on a tongue drum</strong>, and a decision layer you can remap to control
-  almost anything that listens to serial.
+  Whistle. Hum. Strike a note. With about $100 of parts you can turn any
+  audible cue into a machine command — a configurable controller that hears
+  frequencies and emits instructions to <strong>whatever you point it
+  at</strong>. This guide walks you through the whole build. The worked
+  example throughout is the drum-driven rover Team Yondu ran at the UMD
+  Capstone Design Expo; swap in your own actuator and the recipe doesn't
+  change.
 </p>
 
 <nav class="toc">
@@ -47,15 +48,16 @@
 
 <!-- ============================================================ -->
 <section id="overview">
-  <h2><span class="no">00</span> System overview</h2>
+  <h2><span class="no">00</span> What you're building</h2>
   <p>
-    The device splits into two halves. The <strong>transmitter</strong> (“the
-    fin”) is worn or held near the sound source: an INMP441 I2S microphone
-    feeding an ESP32 that streams raw audio over Bluetooth. The
-    <strong>receiver</strong> rides on the rover: a Raspberry&nbsp;Pi&nbsp;4
-    that FFTs the stream, matches frequency peaks against a JSON
-    configuration, and serial-commands an Arduino&nbsp;UNO driving the
-    motors. Hit-to-wheel latency lands under <em>200&nbsp;ms</em>.
+    Two halves. The <strong>transmitter</strong> lives near the sound source:
+    an INMP441 I2S microphone feeding an ESP32 that streams raw audio over
+    Bluetooth. The <strong>receiver</strong> rides on the machine you want to
+    control: a Raspberry&nbsp;Pi&nbsp;4 that FFTs the stream, matches
+    frequency peaks against a JSON map you write, and pushes command codes
+    out a serial port. What listens on that port is up to you — in the rover
+    example it's an Arduino&nbsp;UNO driving two DC motors. Budget your
+    latency and you'll get sound-to-action in under <em>200&nbsp;ms</em>.
   </p>
 
   <div class="chain">
@@ -63,55 +65,62 @@
     <div class="hop">— I2S —▸</div>
     <div class="node"><b>ESP32</b><span>capture +<br>Bluetooth TX</span></div>
     <div class="hop">— BT serial<br>115200 —▸</div>
-    <div class="node"><b>RASPBERRY PI 4</b><span>FFT · peak match<br>config.json</span></div>
+    <div class="node"><b>RASPBERRY PI 4</b><span>FFT · peak match<br>your config.json</span></div>
     <div class="hop">— USB serial<br>9600 —▸</div>
-    <div class="node"><b>ARDUINO UNO</b><span>H-bridge motor<br>routines</span></div>
-    <div class="hop">—▸</div>
-    <div class="node"><b>ROVER</b><span>Lafvin 2WD<br>chassis</span></div>
+    <div class="node"><b>YOUR ACTUATOR</b><span>anything that<br>reads serial</span></div>
+    <div class="hop">e.g. —▸</div>
+    <div class="node"><b>THE ROVER</b><span>Arduino UNO +<br>Lafvin 2WD</span></div>
   </div>
 
   <figure>
     <img src="assets/arrow-design.png" alt="Arrow design: transmitter (INMP441 + ESP32) and receiver (Raspberry Pi 4, USB configuration device, Arduino) with the signal-to-movement flow">
-    <figcaption>FIG 1 · ARROW DESIGN — TRANSMITTER / RECEIVER STACK AND SIGNAL-TO-MOVEMENT FLOW</figcaption>
+    <figcaption>FIG 1 · THE ROVER EXAMPLE — TRANSMITTER / RECEIVER STACK AND SIGNAL-TO-MOVEMENT FLOW</figcaption>
   </figure>
 
   <p>
-    The signal-processing pipeline on the Pi, in order:
+    On the Pi, your signal path runs:
     <strong>1.</strong> convert the raw I2S stream to dB&nbsp;SPL ·
-    <strong>2.</strong> band-pass filter to the instrument's range
-    (~20&nbsp;Hz–1&nbsp;kHz for the drum) ·
+    <strong>2.</strong> band-pass filter to your sound source's range ·
     <strong>3.</strong> subtract the RMS-estimated noise floor ·
     <strong>4.</strong> FFT to isolate frequency peaks ·
     <strong>5.</strong> group peaks within ~5&nbsp;Hz / 5&nbsp;dB to cut
-    processing overhead · then map surviving peaks to output codes from the
-    configuration file.
+    processing overhead · then map the surviving peaks to output codes from
+    your configuration file.
   </p>
 </section>
 
 <!-- ============================================================ -->
 <section id="parts">
   <h2><span class="no">01</span> Bill of materials</h2>
+
+  <h3>The controller core</h3>
   <div class="tbl-scroll"><table>
     <tr><th>Qty</th><th>Part</th><th>Role</th></tr>
-    <tr><td>1</td><td>Lafvin 2WD Robotic Kit</td><td>Chassis, 2 DC gear motors + rear caster, motor driver</td></tr>
     <tr><td>1</td><td>Raspberry Pi 4</td><td>Signal processing &amp; decision logic</td></tr>
     <tr><td>1</td><td>ESP32 DEV Module</td><td>Audio acquisition &amp; Bluetooth transmission</td></tr>
     <tr><td>1</td><td>INMP441 I2S microphone</td><td>Raw audio capture</td></tr>
-    <tr><td>1</td><td>Arduino UNO</td><td>Motor actuation</td></tr>
-    <tr><td>2</td><td>5 V / 2 A USB battery pack</td><td>One for the Pi + Arduino stack, one for the transmitter</td></tr>
     <tr><td>1</td><td>Prototyping board</td><td>Solid, replaceable INMP441 ↔ ESP32 mounting</td></tr>
+    <tr><td>1</td><td>5 V / 2 A USB battery pack</td><td>Powers the transmitter</td></tr>
     <tr><td>1</td><td>USB flash drive</td><td>Carries <code>config.json</code> — remap behavior without touching the Pi</td></tr>
-    <tr><td>—</td><td>Hookup wire + solder</td><td>Short, soldered runs (see §07)</td></tr>
-    <tr><td>1</td><td>Tongue drum (or any tonal instrument)</td><td>The controller</td></tr>
+    <tr><td>—</td><td>Hookup wire + solder</td><td>Short, soldered runs (see the callout in §02)</td></tr>
+    <tr><td>1</td><td>A tonal sound source</td><td>Tongue drum, whistle, kalimba — anything with repeatable pitches</td></tr>
   </table></div>
+
+  <h3>Example actuator — the rover</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>Qty</th><th>Part</th><th>Role</th></tr>
+    <tr><td>1</td><td>Lafvin 2WD Robotic Kit</td><td>Chassis, 2 DC gear motors + rear caster, motor driver</td></tr>
+    <tr><td>1</td><td>Arduino UNO</td><td>Motor actuation</td></tr>
+    <tr><td>1</td><td>5 V / 2 A USB battery pack</td><td>Powers the Pi + Arduino stack on the chassis</td></tr>
+  </table></div>
+
   <div class="callout gold">
-    <strong>Why a drum and not whistling?</strong> Whistling precise
-    frequencies is hard, and sustaining instruments (recorder, violin) hold a
-    note best — but a tongue drum needs zero skill and zero sanitation
-    worries, which is exactly what you want when strangers line up to drive
-    your robot. The web simulator next door is the whistle version: its
-    continuous-control mode calibrates to <em>your</em> range instead of
-    demanding fixed notes.
+    <strong>Picking your instrument:</strong> whistling exact frequencies is
+    hard; sustaining instruments (recorder, violin) hold a note most
+    consistently. A tongue drum is the crowd-pleaser — zero skill, zero
+    sanitation worries, which matters when strangers line up to drive your
+    robot. If you'd rather control by whistle, that's §06: the controller
+    calibrates to <em>your</em> range instead of demanding fixed notes.
   </div>
 </section>
 
@@ -130,7 +139,7 @@
     <tr><td>GND</td><td><code>GND</code></td></tr>
   </table></div>
 
-  <h3>Arduino UNO → motor driver</h3>
+  <h3>Example actuator — Arduino UNO → motor driver</h3>
   <div class="tbl-scroll"><table>
     <tr><th>Signal</th><th>Pin</th></tr>
     <tr><td>Left motor PWM (<code>Lpwm_pin</code>)</td><td><code>5</code></td></tr>
@@ -143,15 +152,15 @@
   <div class="tbl-scroll"><table>
     <tr><th>Link</th><th>Transport</th></tr>
     <tr><td>ESP32 → Raspberry Pi</td><td>Bluetooth serial · <code>/dev/rfcomm0</code> · 115200 baud</td></tr>
-    <tr><td>Raspberry Pi → Arduino</td><td>USB serial · <code>/dev/ttyUSB0</code> · 9600 baud</td></tr>
+    <tr><td>Raspberry Pi → actuator</td><td>USB serial · <code>/dev/ttyUSB0</code> · 9600 baud</td></tr>
     <tr><td>Config flash drive → Pi</td><td>USB</td></tr>
   </table></div>
 
   <div class="callout">
-    <strong>Solder it.</strong> Long unsoldered jumpers measurably raised the
-    electrical noise floor. Keeping wire runs short and soldering the
-    INMP441 ↔ ESP32 connections through a prototyping board was one of the
-    single biggest signal-clarity wins of the project.
+    <strong>Solder it.</strong> Long unsoldered jumpers will measurably raise
+    your electrical noise floor. Keep wire runs short and solder the
+    INMP441 ↔ ESP32 connections through a prototyping board — on the original
+    build this was one of the single biggest signal-clarity wins.
   </div>
 </section>
 
@@ -159,28 +168,31 @@
 <section id="firmware">
   <h2><span class="no">03</span> Firmware</h2>
 
-  <h3>ESP32 — transmitter</h3>
+  <h3>Transmitter (ESP32)</h3>
   <p>
     Flash <a href="https://github.com/Altair-ajit/yondu/blob/main/hardware/esp32/yondu_mic_tx/yondu_mic_tx.ino">hardware/esp32/yondu_mic_tx.ino</a>
     from the Arduino IDE (board: <em>ESP32 Dev Module</em>). It reads
     512-sample I2S buffers at 48&nbsp;kHz/32-bit and streams every sample as
     a text line over Bluetooth serial, advertising as
     <code>ESP32_Yondu</code>. The I2S mic bring-up follows atomic14's
-    <code>esp32-i2s-mic-test</code>.
+    <code>esp32-i2s-mic-test</code>. Nothing here is instrument- or
+    actuator-specific — flash it and forget it.
   </p>
 
-  <h3>Arduino — actuator</h3>
+  <h3>Example actuator — the rover sketch</h3>
   <p>
     Flash <a href="https://github.com/Altair-ajit/yondu/blob/main/hardware/arduino/yondu_rover/yondu_rover.ino">hardware/arduino/yondu_rover.ino</a>
-    (board: <em>Arduino UNO</em>). Engineering-standards notes from the
-    paper: all pins are declared with <code>#define</code>/<code>const</code>
-    (no dynamic allocation), <code>setup()</code> calls the stop routine
-    first so the rover stays put during initialization, and direction pins
-    default LOW so a brown-out can't twitch the wheels. Commands are
-    newline-terminated strings:
+    (board: <em>Arduino UNO</em>). Treat it as a template for any actuator
+    you build: a <code>readStringUntil('\n')</code> loop that matches
+    incoming codes and fires a routine per code. Worth copying even if you
+    never build the rover — declare pins with
+    <code>#define</code>/<code>const</code> (no dynamic allocation), call
+    your stop routine first thing in <code>setup()</code>, and default
+    outputs LOW so a brown-out can't twitch the hardware. The rover maps its
+    codes like this:
   </p>
   <div class="tbl-scroll"><table>
-    <tr><th>Code</th><th>Action</th><th>PWM</th></tr>
+    <tr><th>Code</th><th>Rover action</th><th>PWM</th></tr>
     <tr><td><code>A</code></td><td>Drive forward</td><td>128</td></tr>
     <tr><td><code>B</code></td><td>Drive backward</td><td>128</td></tr>
     <tr><td><code>C</code></td><td>Pivot right</td><td>100</td></tr>
@@ -188,10 +200,11 @@
     <tr><td><code>0</code></td><td>Stop</td><td>0</td></tr>
   </table></div>
   <div class="callout gold">
-    <strong>Turns are deliberately slow.</strong> The Pi's sampling cadence
-    made fast pivots overshoot, so turn PWM is reduced — each drum note nudges
-    the heading a controllable amount. This one change is most of why expo
-    visitors could actually steer.
+    <strong>Run your turns slow.</strong> Detection arrives in ~20&nbsp;ms
+    windows, so a fast pivot overshoots before the next command lands.
+    Dropping the turn PWM makes each note nudge the heading a controllable
+    amount — this one change is most of why expo visitors could actually
+    steer the rover.
   </div>
 </section>
 
@@ -201,7 +214,7 @@
 <pre><code><span class="c"># dependencies</span>
 sudo apt update &amp;&amp; sudo apt install python3-numpy python3-serial bluez
 
-<span class="c"># pair with the transmitter (once)</span>
+<span class="c"># pair with your transmitter (once)</span>
 bluetoothctl
   scan on          <span class="c"># note ESP32_Yondu's MAC</span>
   pair &lt;MAC&gt;
@@ -211,51 +224,51 @@ bluetoothctl
 <span class="c"># bind the Bluetooth serial port (each boot, or via systemd)</span>
 sudo rfcomm bind /dev/rfcomm0 &lt;MAC&gt;
 
-<span class="c"># drop in a config and run</span>
+<span class="c"># drop in your config and run</span>
 cp config.example.json config.json
 python3 signal_processor.py</code></pre>
   <p>
-    <code>signal_processor.py</code> buffers 1024-sample windows, applies a
-    Hanning window + FFT, converts magnitudes to dB, and checks every
-    configured peak: frequency within <code>sensitivity</code> Hz and
-    amplitude above threshold&nbsp;→ its <code>output_code</code> is sent to
-    the Arduino. No peak matched&nbsp;→ <code>0</code> (stop).
+    <a href="https://github.com/Altair-ajit/yondu/blob/main/hardware/raspberry-pi/signal_processor.py">signal_processor.py</a>
+    buffers 1024-sample windows, applies a Hanning window + FFT, converts
+    magnitudes to dB, and checks every peak in your config: frequency within
+    <code>sensitivity</code> Hz and amplitude above threshold&nbsp;→ its
+    <code>output_code</code> goes out the serial port. Nothing matched&nbsp;→
+    <code>0</code>, which your actuator should treat as "stand down."
   </p>
 </section>
 
 <!-- ============================================================ -->
 <section id="calibrate">
-  <h2><span class="no">05</span> Calibrate &amp; map — use it as a control system</h2>
+  <h2><span class="no">05</span> Calibrate &amp; map — make it yours</h2>
   <p>
-    The decision layer is <strong>entirely configuration-driven</strong> —
-    this is what turns a drum-driven rover into a general audio control
-    system. The Pi never hardcodes a note: it reads a JSON file (from the
-    USB stick) mapping frequency bands to arbitrary output codes.
+    Here's where the system becomes a <strong>general control surface</strong>:
+    the Pi never hardcodes a note. It reads a JSON file from the USB stick
+    mapping frequency bands to whatever output codes you choose. New
+    instrument, new room, new machine — you edit a file, not code.
   </p>
 
-  <h3>Step 1 — survey your instrument / environment</h3>
+  <h3>Step 1 — survey your sound source</h3>
   <p>
     Run the processor with the <code>env_scan</code> config: instead of
-    driving, it prints the top-20 FFT peaks it hears. Strike each note
-    repeatedly, at different angles and intensities, and log which
-    frequencies recur and how much they vary.
+    emitting commands, it prints the top-20 FFT peaks it hears. Play each
+    note you plan to use — repeatedly, at different angles and intensities —
+    and log which frequencies recur and how much they wander.
   </p>
 <pre><code>{ "config_name": "env_scan", "Global_Sensitivity": 10.0,
   "Global_Amplitude": 65.0, "Peaks": {} }</code></pre>
 
   <h3>Step 2 — pick separable frequencies</h3>
   <p>
-    Choose notes whose measured bands don't overlap (the team's phase-3
-    testing established confidence intervals per drum pad and kept the four
-    most stable, distinguishable ones). Adjacent or harmonically related
-    notes will cross-trigger — see §07.
+    Keep the notes whose measured bands don't overlap. Adjacent or
+    harmonically related pitches will cross-trigger; the rover build tested
+    every drum pad and kept the four most stable, well-separated ones.
   </p>
 
-  <h3>Step 3 — write the map</h3>
+  <h3>Step 3 — write your map</h3>
 <pre><code>{
-  "config_name": "tongue_drum_expo",
+  "config_name": "my_controller",
   "Global_Sensitivity": 10.0,   <span class="c">// default ± Hz tolerance</span>
-  "Global_Amplitude": 65.0,     <span class="c">// dB threshold — raise in loud rooms</span>
+  "Global_Amplitude": 65.0,     <span class="c">// dB threshold — raise it in loud rooms</span>
   "Peaks": {
     "Peak1": { "frequency": 440.00, "sensitivity": 5.0, "output_code": "A" },
     "Peak2": { "frequency": 523.25, "sensitivity": 5.0, "output_code": "B" },
@@ -264,36 +277,36 @@ python3 signal_processor.py</code></pre>
   }
 }</code></pre>
   <p>
-    The output codes are just bytes on a serial line. Point them at anything:
-    the paper's application studies included <strong>smart homes</strong>
-    (tone-triggered lights, appliances, locks), <strong>industrial
-    monitoring</strong> (self-disengage when frequencies associated with
-    mechanical failure appear — here the "instrument" is the machine itself),
-    and <strong>interactive exhibits</strong> (visitors trigger displays with
-    musical notes). Swap the Arduino sketch's motor routines for whatever
-    your actuator needs; the acquisition and decision layers don't change.
+    The output codes are just bytes on a serial line — point them at
+    anything. Tone-triggered lights, appliances, or locks in a smart home. A
+    factory rig that self-disengages when the frequencies of a failing
+    bearing appear (there, the "instrument" is the machine itself). An
+    exhibit visitors play notes at to trigger displays. Swap the rover
+    sketch's motor routines for whatever your build needs; the acquisition
+    and decision layers never change.
   </p>
+
   <div class="callout">
     <strong>Placement &amp; noise, before you blame the code:</strong> don't
-    mount the mic inside a resonant body (it amplified voice frequencies into
-    false triggers — keep it <em>near</em> the instrument), trigger one note
-    at a time (simultaneous tones interfere and bury the dominant peak), and
-    test with background noise playing before you trust the map in a real
-    room.
+    mount the mic inside a resonant body (on the original build it amplified
+    voice frequencies into false triggers — keep it <em>near</em> the
+    instrument), trigger one note at a time (simultaneous tones interfere and
+    bury the dominant peak), and rehearse with background noise playing
+    before you trust your map in a real room.
   </div>
 </section>
 
 <!-- ============================================================ -->
 <section id="pitch">
-  <h2><span class="no">06</span> Pitch control — run the simulator's mode on hardware</h2>
+  <h2><span class="no">06</span> Pitch control — run the simulator's mode on your hardware</h2>
   <p>
     Discrete notes (§05) are one map. The
-    <a href="index.html">simulator</a> demonstrates the other: <strong>pitch-style
-    continuous control</strong>, where the controller calibrates to
-    <em>your whistle</em> and reads where your pitch sits inside your own
-    range — hold your center note to go, slide high to turn one way, low to
-    turn the other, go quiet to stop. You can run that same scheme on this
-    hardware without touching a line of code.
+    <a href="index.html">simulator</a> demonstrates the other:
+    <strong>pitch-style continuous control</strong>, where the controller
+    calibrates to <em>your whistle</em> and reads where your pitch sits
+    inside your own range — hold your center note to go, slide high to turn
+    one way, low to turn the other, go quiet to stop. You can run that same
+    scheme on this hardware without touching a line of code.
   </p>
 
   <h3>How the mapping works</h3>
@@ -317,30 +330,30 @@ python3 signal_processor.py</code></pre>
     <li><a href="index.html">Open the simulator</a>, enable your microphone,
       and run the ~8-second calibration (noise floor → steady note → sweep up
       → sweep down).</li>
-    <li>Fly the arrow until the controls feel natural — the rover will obey
-      the identical gesture boundaries.</li>
+    <li>Fly the arrow until the controls feel natural — your hardware will
+      obey the identical gesture boundaries.</li>
     <li>Hit <strong>⇩ whistle print</strong> and save the JSON.</li>
-    <li>Rename it <code>config.json</code>, drop it on the rover's USB
-      config stick, and start <code>signal_processor.py</code> (§04).</li>
-    <li>Whistle. The arrow on your screen and the rover on your floor are now
-      speaking the same language.</li>
+    <li>Rename it <code>config.json</code>, drop it on your USB config
+      stick, and start <code>signal_processor.py</code> (§04).</li>
+    <li>Whistle. The arrow on your screen and the machine on your floor are
+      now speaking the same language.</li>
   </ol>
 
   <div class="callout gold">
-    <strong>Tune for whistles:</strong> the drum build band-passed
-    ~20&nbsp;Hz–1&nbsp;kHz; whistles live around 500–3000&nbsp;Hz, so widen
-    the filter range accordingly. In loud rooms, raise
-    <code>Global_Amplitude</code> so breaths and chatter stay below the
+    <strong>Tune for whistles:</strong> the rover example band-passes
+    ~20&nbsp;Hz–1&nbsp;kHz for the drum; whistles live around
+    500–3000&nbsp;Hz, so widen your filter range accordingly. In loud rooms,
+    raise <code>Global_Amplitude</code> so breaths and chatter stay below the
     gate.
   </div>
   <div class="callout">
-    <strong>What's different from the sim:</strong> the stock firmware drives
-    at fixed PWM, so whistle <em>loudness</em> doesn't scale speed, and turns
-    are discrete pivots at the detection cadence rather than smooth banking —
-    that's exactly why §03 runs turn PWM slow. If you want the full demo
-    feel, a small mod to <code>signal_processor.py</code> can scale an extra
-    PWM byte from the detected peak's amplitude and pass it alongside the
-    code.
+    <strong>What's different from the sim:</strong> the stock rover firmware
+    drives at fixed PWM, so whistle <em>loudness</em> doesn't scale speed,
+    and turns are discrete pivots at the detection cadence rather than smooth
+    banking — that's exactly why §03 runs turn PWM slow. If you want the full
+    demo feel, a small mod to <code>signal_processor.py</code> can scale an
+    extra PWM byte from the detected peak's amplitude and pass it alongside
+    the code.
   </div>
 </section>
 
